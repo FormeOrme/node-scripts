@@ -1,0 +1,5 @@
+
+moxfield_decks/*
+node_modules/*
+oracle-cards*
+*.csv

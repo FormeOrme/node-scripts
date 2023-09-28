@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Moxfield Stats</title>
+    <!-- Include Material Icons CSS -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+
+    <style>
+        :root {
+            --mtg-W: var(--bs-gray-200);
+            --mtg-U: var(--bs-blue);
+            --mtg-B: var(--bs-gray-800);
+            --mtg-R: var(--bs-red);
+            --mtg-G: var(--bs-green);
+
+            --mtg-C: #beb9b2;
+            --mtg-W: #f0f2c0;
+            --mtg-U: #b5cde3;
+            --mtg-B: #aca29a;
+            --mtg-R: #db8664;
+            --mtg-G: #93b483;
+        }
+
+        .text-transparent {
+            color: transparent;
+        }
+
+        [count]:after {
+            content: attr(count);
+        }
+
+        /* Add more color classes for other Google Material Design colors as needed */
+    </style>
+
+    <!-- Include Bootstrap 5 CSS via jsDelivr CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/gh/FormeOrme/projects@970158f73b91b7ca40f6a8808a195b0f0f323447/util.js"></script>
+</head>
+
+<body>
+    <div class="container" id="container">
+        <h1 class="mt-4">Moxfield Deck Stats</h1>
+    </div>
+
+    <script>
+        Array.prototype.isContained = function (main) {
+            const mainSet = new Set(main);
+            return this.every(element => mainSet.has(element));
+        };
+
+        Dom.Elem.prototype.wrapWith = function (element, options) {
+            if (!options.optional) {
+                return this;
+            }
+            element.children = Array.isArray(element.children) ? element.children : (element.children ? [element.children] : []);
+            element.children.splice(options.position === undefined ? element.children.length : options.position, 0, this);
+            return element;
+        }
+
+        const colorMapping = {
+            "": "Colorless", W: "White", U: "Blue", B: "Black", R: "Red", G: "Green",
+            WU: "Azorius", WB: "Orzhov", WR: "Boros", WG: "Selesnya", UB: "Dimir",
+            UR: "Izzet", UG: "Simic", BR: "Rakdos", BG: "Golgari", RG: "Gruul",
+            WUB: "Esper", WUR: "Jeskai", UBG: "Sultai", WBR: "Mardu", WRG: "Naya",
+            WBG: "Abzan", BRG: "Jund", UBR: "Grixis", URG: "Temur", WUG: "Bant",
+            WUBRG: "Five-Color"
+        }
+
+        function textVersion(count, color, ci, hubs, type) {
+            return `${count} ${type.join(" ")} card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} in${ci.length == 0 ? "" : ` ${textJoin(ci.map(c => colorMapping[c] || c))}`} decks ${ci.length != 0 && hubs.length != 0 ? 'or decks ' : ''} ${hubs.length == 0 ? "" : `tagged with ${textJoin(hubs)}`}`.trim();
+        }
+
+        function textJoin(list) {
+            const clone = [...list];
+            if (clone.length == 1) {
+                return clone[0];
+            } else {
+                const last = clone.pop();
+                return clone.join(", ") + " or " + last;
+            }
+        }
+
+        function isVisible(color, ci, hubs, type) {
+            return card =>
+                (color.length != 0 ? color.isContained(Object.keys(card.color())) : true) &&
+                (ci.length != 0 ? ci.isContained(Object.keys(card.colorIdentity())) : true) &&
+                (hubs.length != 0 ? hubs.isContained(Object.keys(card.hubs())) : true) &&
+                (type.length != 0 ? type.isContained(card.type()) : true) &&
+                true;
+        }
+
+        const compare = (c1, c2, list, property) => c2.sum(list, property) - c1.sum(list, property);
+
+        function getSort(color, ci, hubs, type) {
+            return (c1, c2) =>
+                compare(c1, c2, ci, "colorIdentity") ||
+                compare(c1, c2, hubs, "hubs") ||
+                c2.count() - c1.count()
+        }
+
+        const filterTypes = ["color", "colorIdentity", "hubs", "types"];
+
+        function updateFilters() {
+            console.time("updateFilters")
+            const filters = filterTypes
+                .map(type => ({
+                    type: type,
+                    list: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[checked='true']") || [])
+                        .map(b => b.title)
+                }));
+            console.log(...filters);
+
+            filters.forEach(filter => {
+                const wrapper = Dom.qs([`[selected="${filter.type}"]`]);
+                if (!!wrapper) {
+                    wrapper.innerText = "";
+                    filter.list.map(name => wrapper.append(Span.with({
+                        class: `ms-1 badge text-bg-light border`,
+                        innerText: colorMapping[name] || name
+                    }).create()))
+                }
+            })
+
+            const cardsContainer = Dom.NODES.cards;
+            const cards = Array.from(cardsContainer.querySelectorAll("[card]"));
+
+            Debugger.cards = cards;
+
+            const filterLists = filters.map(filter => filter.list);
+
+            cards.forEach(card => {
+                const isCardVisible = isVisible(...filterLists)(card);
+                card.classList.toggle("d-none", !isCardVisible);
+                card.visible = isCardVisible;
+                card.updateCount(...filterLists);
+            });
+
+            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, ...filterLists);
+
+            cards.sort(getSort(...filterLists)).forEach(card => cardsContainer.append(card));
+
+            /* Limit results **/
+            cards.filter(c => c.visible).forEach((card, index) => {
+                if (index > 29) {
+                    card.classList.add("d-none");
+                } else {
+                    card.loadImage();
+                }
+            });
+            /* */
+
+            console.timeEnd("updateFilters");
+        }
+
+        function toggleButton(node) {
+            const checked = node.getAttribute("checked") === 'true';
+            node.setAttribute("checked", !checked);
+            node.classList.toggle("btn-outline-primary", checked);
+            node.classList.toggle("btn-primary", !checked);
+            const inner = node.querySelector("[inner]");
+            if (inner) {
+                inner.classList.toggle("btn-light", checked);
+                inner.classList.toggle("btn-link", !checked);
+            }
+        }
+
+        const AccordionItem = (typeId, title, data) => Div.with({
+            class: "accordion-item",
+            children: [
+                H1.with({
+                    class: "accordion-header user-select-none",
+                    children: [
+                        Button.with({
+                            class: "accordion-button p-1 ps-2 collapsed",
+                            attribute: {
+                                type: "button",
+                                "data-bs-toggle": "collapse",
+                                "data-bs-target": `#${typeId}Filter`,
+                            },
+                            children: [
+                                Span.with({
+                                    class: "my-1",
+                                    innerText: title,
+                                }),
+                                Span.with({
+                                    class: "ms-2",
+                                    attribute: {
+                                        selected: typeId
+                                    }
+                                })
+                            ]
+                        })
+                    ]
+                }),
+                Div.with({
+                    id: `${typeId}Filter`,
+                    class: "accordion-collapse collapse",
+                    attribute: {
+                        "data-bs-parent": "#filters"
+                    },
+                    children: Div.with({
+                        id: typeId,
+                        class: "row flex-row justify-content-center m-2",
+                        children: (data[typeId] || Object.keys(data.countMap[typeId])).sort().map(type => Span.with({
+                            _: (pillCount = data.countMap[typeId]?.[type],
+                                isCI = typeId === "colorIdentity",
+                                isTypes = typeId === "types",
+                                isSuperType = data.superTypes.includes(type)),
+                            class: `col-1 p-0 m-1 position-relative ${pillCount ? "ms-3" : ""} `,
+                            children: [
+                                Span.with({
+                                    class: "badge rounded-pill bg-primary position-absolute top-50 start-0 translate-middle",
+                                    innerText: pillCount ? " " : "",
+                                    attribute: {
+                                        count: pillCount
+                                    }
+                                }),
+                                Button.with({
+                                    class: `${isCI ? `mtg-${type} border-0 rounded-3` : ""} ${isTypes ? `border-end-0` : ""} p-1 col-12 btn btn-outline-primary m-0 text-truncate ${isSuperType ? 'fw-bold' : 'fw-normal'}`,
+                                    children: [
+                                        Small.with({
+                                            class: `${isCI ? `btn btn-light rounded-2 text-decoration-none text-info-emphasis col-12 p-0` : ""}`,
+                                            innerText: colorMapping[type] || type,
+                                            attribute: isCI ? { inner: "" } : {}
+                                        })
+                                    ],
+                                    attribute: {
+                                        type: "button",
+                                        checked: false,
+                                        title: type,
+                                    },
+                                    event: { click: (e, n) => { toggleButton(n); updateFilters(); } }
+                                }).wrapWith(Div.with({
+                                    class: "btn-group col-12",
+                                    children: Button.with({
+                                        class: "btn btn-outline-secondary border-left-0 px-0 col-1",
+                                    })
+                                }), { optional: isTypes, position: 0 })
+                            ]
+                        }))
+                    })
+                })
+            ]
+        });
+
+        const ProgressBar = () => Span.with({
+            class: "progress position-relative",
+            children: [
+                Span.with({
+                    class: "position-absolute top-50 start-50 translate-middle text-nowrap",
+                    attribute: { progress: "" }
+                }),
+                Span.with({
+                    class: "progress-bar",
+                    function: {
+                        set: function (n) { this.style.width = `${n}%`; }
+                    },
+                    attribute: { bar: "" }
+                })
+            ]
+        })
+
+        const container = Dom.id("container");
+        let Debugger = {};
+
+        const reduceObj = (obj, arr) => arr.reduce((a, c) => a + obj[c], 0);
+
+        fetch('/moxfieldStatsData.json')
+            .then((response) => response.json())
+            .then((data) => {
+                Debugger.data = data;
+
+                container.append(Div.with({
+                    id: "textDescription",
+                    class: "alert alert-primary p-1 ps-2"
+                }).create());
+
+                console.time("BUILD_ACCORDION");
+                container.append(Div.with({
+                    id: "filters",
+                    class: "accordion mb-3",
+                    children: [
+                        // AccordionItem("color", "Color", data),
+                        AccordionItem("colorIdentity", "Color Identity", data),
+                        AccordionItem("hubs", "Hub", data),
+                        AccordionItem("types", "Type", data),
+                    ]
+                }).create());
+                console.timeEnd("BUILD_ACCORDION");
+
+                Dom.addStyleNode(Object.keys(data.countMap.colorIdentity).map(ci => {
+                    const width = 51 / Math.max(1, ci.length - 1);
+                    return `.mtg-${ci}{ background: repeating-linear-gradient(45deg, ${(ci || "C").split("")
+                        .map((c, i) => `var(--mtg-${c}) ${i * width}px, var(--mtg-${c}) ${(i + 1) * width}px`).join(", ")}); }`;
+                }).join("\n"));
+
+                console.time("BUILD_BODY");
+                container.append(Div.with({
+                    id: "cards",
+                    class: "row flex-row m-1",
+                    children: data.cards.map(card => Div.with({
+                        class: `col-2 mb-3 position-relative d-none`,
+                        attribute: { card: "" },
+                        children: [
+                            Div.with({
+                                class: "bg-light position-absolute w-75 mb-3 p-1 rounded-2 bottom-0 start-50 translate-middle-x",
+                                children: ProgressBar()
+                            }),
+                            Small.with({
+                                class: "position-absolute text-transparent mt-2 text-truncate w-75 top-0 start-50 translate-middle-x",
+                                innerText: card.name
+                            }),
+                            Img.with({
+                                class: "img-fluid user-select-none rounded-3",
+                                attribute: {
+                                    image: "",
+                                    title: card.name,
+                                }
+                            })
+                        ],
+                        function: {
+                            count: () => card.count,
+                            type: () => card.types,
+                            color: () => card.color,
+                            hubs: () => card.hubs,
+                            colorIdentity: () => card.colorIdentity,
+
+                            loadImage: function () {
+                                this.querySelector("[image]").src = card.image;
+                            },
+
+                            updateCount: function (color, ci, hubs, type) {
+                                let total = data.count;
+                                let count = card.count;
+
+                                if (ci.length != 0) {
+                                    total = reduceObj(data.countMap.colorIdentity, ci);
+                                    count = reduceObj(card.colorIdentity, ci);
+                                }
+
+                                if (hubs.length != 0) {
+                                    total = reduceObj(data.countMap.hubs, hubs);
+                                    count = reduceObj(card.hubs, hubs);
+                                }
+
+                                this.querySelector("[progress]").innerText = `${count}/${total} (${Utils.prc(count, total).toFixed(1)}%)`;
+                                this.querySelector("[bar]").set(Utils.prc(count, total).toFixed(1));
+                            },
+
+                            sum: function (array, property) { return Object.entries(card[property]).filter(([k, v]) => array.includes(k)).reduce((a, [k, v]) => a + v, 0) }
+                        }
+                    }))
+                }).create());
+                console.timeEnd("BUILD_BODY");
+                updateFilters();
+            })
+            .catch((error) => {
+                console.error('Error fetching deck data:', error);
+            });
+
+    </script>
+</body>
+
+</html>
