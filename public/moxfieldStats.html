@@ -26,7 +26,11 @@
             color: transparent;
         }
 
-        [count]:after {
+        .badge[count]:empty {
+            display: inline-block;
+        }
+
+        .badge[count]:after {
             content: attr(count);
         }
 
@@ -37,7 +41,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
     <script
-        src="https://cdn.jsdelivr.net/gh/FormeOrme/projects@970158f73b91b7ca40f6a8808a195b0f0f323447/util.js"></script>
+        src="https://cdn.jsdelivr.net/gh/FormeOrme/projects@fd4a4cbdefeb87c37735c69e2ad0a4149ff38b22/util.js"></script>
 </head>
 
 <body>
@@ -50,15 +54,6 @@
             const mainSet = new Set(main);
             return this.every(element => mainSet.has(element));
         };
-
-        Dom.Elem.prototype.wrapWith = function (element, options) {
-            if (!options.optional) {
-                return this;
-            }
-            element.children = Array.isArray(element.children) ? element.children : (element.children ? [element.children] : []);
-            element.children.splice(options.position === undefined ? element.children.length : options.position, 0, this);
-            return element;
-        }
 
         const colorMapping = {
             "": "Colorless", W: "White", U: "Blue", B: "Black", R: "Red", G: "Green",
@@ -211,9 +206,8 @@
                                 isSuperType = data.superTypes.includes(type)),
                             class: `col-1 p-0 m-1 position-relative ${pillCount ? "ms-3" : ""} `,
                             children: [
-                                Span.with({
+                                isTypes ? null : Span.with({
                                     class: "badge rounded-pill bg-primary position-absolute top-50 start-0 translate-middle",
-                                    innerText: pillCount ? " " : "",
                                     attribute: {
                                         count: pillCount
                                     }

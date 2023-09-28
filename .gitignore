@@ -1,5 +1,5 @@
 
-moxfield_decks/*
-node_modules/*
+moxfield_decks
+node_modules
 oracle-cards*
 *.csv
