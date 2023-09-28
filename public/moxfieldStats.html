@@ -54,9 +54,28 @@
             const mainSet = new Set(main);
             return this.every(element => mainSet.has(element));
         };
+        Array.prototype.containsOne = function (main) {
+            const mainSet = new Set(main);
+            return this.some(element => mainSet.has(element));
+        };
         DOMTokenList.prototype.toggleTF = function (condition, ifTrue, ifFalse) {
             this.toggle(ifTrue, condition);
             this.toggle(ifFalse, !condition);
+        }
+
+        class Timer {
+            static last;
+            static time(key) {
+                if (!!this.last) {
+                    console.timeEnd(this.last);
+                }
+                console.time(key);
+                this.last = key;
+            }
+            static stop() {
+                console.timeEnd(this.last);
+                this.last = undefined;
+            };
         }
 
         const colorMapping = {
@@ -69,25 +88,26 @@
         }
 
         function textVersion(count, color, ci, hubs, type) {
-            return `${count} ${type.join(" ")} card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} in${ci.length == 0 ? "" : ` ${textJoin(ci.map(c => colorMapping[c] || c))}`} decks ${ci.length != 0 && hubs.length != 0 ? 'or decks ' : ''} ${hubs.length == 0 ? "" : `tagged with ${textJoin(hubs)}`}`.trim();
+            return `${count} ${type.include.join(" ")} card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} in${ci.include.length == 0 ? "" : ` ${textJoin(ci.include.map(c => colorMapping[c] || c))}`} decks ${ci.include.length != 0 && hubs.include.length != 0 ? 'or decks ' : ''} ${hubs.include.length == 0 ? "" : `tagged with ${textJoin(hubs.include)}`} ${type.exclude.length == 0 ? '' : `(excluding ${textJoin(type.exclude, "and")} cards)`}`.trim();
         }
 
-        function textJoin(list) {
+        function textJoin(list, op = "or") {
             const clone = [...list];
             if (clone.length == 1) {
                 return clone[0];
             } else {
                 const last = clone.pop();
-                return clone.join(", ") + " or " + last;
+                return clone.join(", ") + ` ${op} ` + last;
             }
         }
 
         function isVisible(color, ci, hubs, type) {
             return card =>
-                (color.length != 0 ? color.isContained(Object.keys(card.color())) : true) &&
-                (ci.length != 0 ? ci.isContained(Object.keys(card.colorIdentity())) : true) &&
-                (hubs.length != 0 ? hubs.isContained(Object.keys(card.hubs())) : true) &&
-                (type.length != 0 ? type.isContained(card.type()) : true) &&
+                (color.include.length != 0 ? color.include.isContained(Object.keys(card.color())) : true) &&
+                (ci.include.length != 0 ? ci.include.isContained(Object.keys(card.colorIdentity())) : true) &&
+                (hubs.include.length != 0 ? hubs.include.isContained(Object.keys(card.hubs())) : true) &&
+                (type.include.length != 0 ? type.include.isContained(card.type()) : true) &&
+                (type.exclude.length != 0 ? !type.exclude.containsOne(card.type()) : true) &&
                 true;
         }
 
@@ -95,53 +115,57 @@
 
         function getSort(color, ci, hubs, type) {
             return (c1, c2) =>
-                compare(c1, c2, ci, "colorIdentity") ||
-                compare(c1, c2, hubs, "hubs") ||
+                compare(c1, c2, ci.include, "colorIdentity") ||
+                compare(c1, c2, hubs.include, "hubs") ||
                 c2.count() - c1.count()
         }
 
         const filterTypes = ["color", "colorIdentity", "hubs", "types"];
 
         function updateFilters() {
-            console.time("updateFilters")
+            Timer.time("LoadFilters");
             const filters = filterTypes
                 .map(type => ({
                     type: type,
-                    include: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[include][checked='true']") || []).map(b => b.title),
-                    exclude: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[exclude][checked='true']") || []).map(b => b.title)
+                    include: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[include][checked='true']") || []).map(b => b.getAttribute("include")),
+                    exclude: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[exclude][checked='true']") || []).map(b => b.getAttribute("exclude"))
                 }));
-
             console.log(...filters);
 
+            Timer.time("UpdateBadges");
             filters.forEach(filter => {
                 const wrapper = Dom.qs([`[selected="${filter.type}"]`]);
                 if (!!wrapper) {
                     wrapper.innerText = "";
-                    filter.include.map(name => wrapper.append(Span.with({
-                        class: `ms-1 badge text-bg-light border`,
+                    const addBadges = (arr, ex) => arr.map(name => wrapper.append(Span.with({
+                        class: `ms-1 badge text-bg-light border fw-normal ${ex ? "text-decoration-line-through" : ""}`,
                         innerText: colorMapping[name] || name
-                    }).create()))
+                    }).create()));
+                    addBadges(filter.include, false);
+                    addBadges(filter.exclude, true);
                 }
             })
 
+            Timer.time("LoadCards");
             const cardsContainer = Dom.NODES.cards;
             const cards = Array.from(cardsContainer.querySelectorAll("[card]"));
 
             Debugger.cards = cards;
+            Timer.time("WriteDescription");
+            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, ...filters);
 
-            const filterLists = filters.map(filter => filter.include);
-
+            Timer.time("ToggleCards");
             cards.forEach(card => {
-                const isCardVisible = isVisible(...filterLists)(card);
+                const isCardVisible = isVisible(...filters)(card);
                 card.classList.toggle("d-none", !isCardVisible);
                 card.visible = isCardVisible;
-                card.updateCount(...filterLists);
+                card.updateCount(...filters);
             });
 
-            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, ...filterLists);
+            Timer.time("SortCards");
+            cards.sort(getSort(...filters)).forEach(card => cardsContainer.append(card));
 
-            cards.sort(getSort(...filterLists)).forEach(card => cardsContainer.append(card));
-
+            Timer.time("LimitResults");
             /* Limit results **/
             cards.filter(c => c.visible).forEach((card, index) => {
                 if (index > 29) {
@@ -152,7 +176,12 @@
             });
             /* */
 
-            console.timeEnd("updateFilters");
+            Timer.stop();
+        }
+
+        const BTN_TYPE = {
+            include: { get sibling() { return BTN_TYPE.exclude; }, selector: "include", onClass: "btn-primary", offClass: "btn-outline-primary" },
+            exclude: { get sibling() { return BTN_TYPE.include; }, selector: "exclude", onClass: "btn-secondary", offClass: "btn-outline-secondary" },
         }
 
         function toggleButton(node) {
@@ -160,12 +189,16 @@
             const checked = !oldValue;
             node.setAttribute("checked", checked);
 
-            if ([...node.classList].some(c => c.match(/primary/g))) {
-                node.classList.toggleTF(checked, "btn-primary", "btn-outline-primary");
-            }
-            if ([...node.classList].some(c => c.match(/secondary/g))) {
-                node.classList.toggleTF(checked, "btn-secondary", "btn-outline-secondary");
-            }
+            Object.values(BTN_TYPE).map((type) => {
+                if (node.matches(`[${type.selector}]`)) {
+                    node.classList.toggleTF(checked, type.onClass, type.offClass);
+                    const sibling = node.parentElement.querySelector(`[${type.sibling.selector}][checked='true']`);
+                    if (sibling) {
+                        sibling.setAttribute("checked", !checked);
+                        sibling.classList.toggleTF(!checked, type.sibling.onClass, type.sibling.offClass);
+                    }
+                }
+            });
 
             const inner = node.querySelector("[inner]");
             if (inner) {
@@ -224,7 +257,7 @@
                                     }
                                 }),
                                 Button.with({
-                                    class: `${isCI ? `mtg-${type} border-0 rounded-3` : ""} ${isTypes ? `border-end-0` : ""} p-1 col-12 btn btn-outline-primary m-0 text-truncate ${isSuperType ? 'fw-bold' : 'fw-normal'}`,
+                                    class: `${isCI ? `mtg-${type} border-0 rounded-3` : ""} ${isTypes ? `border-end-0` : ""} p-1 col-12 btn ${BTN_TYPE.include.offClass} m-0 text-truncate ${isSuperType ? 'fw-bold' : 'fw-normal'}`,
                                     children: [
                                         Small.with({
                                             class: `${isCI ? `btn btn-light rounded-2 text-decoration-none text-info-emphasis col-12 p-0` : ""}`,
@@ -234,7 +267,7 @@
                                     ],
                                     attribute: {
                                         type: "button",
-                                        include: "",
+                                        include: type,
                                         checked: false,
                                         title: type,
                                     },
@@ -243,10 +276,10 @@
                                     class: "btn-group col-12",
 
                                     children: Button.with({
-                                        class: "btn btn-outline-secondary border-left-0 px-0 col-1",
+                                        class: `btn ${BTN_TYPE.exclude.offClass} border-left-0 px-0 col-1`,
                                         attribute: {
                                             type: "button",
-                                            exclude: "",
+                                            exclude: type,
                                             checked: false,
                                             title: `Exclude ${type}`,
                                         },
@@ -350,14 +383,14 @@
                                 let total = data.count;
                                 let count = card.count;
 
-                                if (ci.length != 0) {
-                                    total = reduceObj(data.countMap.colorIdentity, ci);
-                                    count = reduceObj(card.colorIdentity, ci);
+                                if (ci.include.length != 0) {
+                                    total = reduceObj(data.countMap.colorIdentity, ci.include);
+                                    count = reduceObj(card.colorIdentity, ci.include);
                                 }
 
-                                if (hubs.length != 0) {
-                                    total = reduceObj(data.countMap.hubs, hubs);
-                                    count = reduceObj(card.hubs, hubs);
+                                if (hubs.include.length != 0) {
+                                    total = reduceObj(data.countMap.hubs, hubs.include);
+                                    count = reduceObj(card.hubs, hubs.include);
                                 }
 
                                 this.querySelector("[progress]").innerText = `${count}/${total} (${Utils.prc(count, total).toFixed(1)}%)`;
