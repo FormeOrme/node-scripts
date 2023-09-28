@@ -54,6 +54,10 @@
             const mainSet = new Set(main);
             return this.every(element => mainSet.has(element));
         };
+        DOMTokenList.prototype.toggleTF = function (condition, ifTrue, ifFalse) {
+            this.toggle(ifTrue, condition);
+            this.toggle(ifFalse, !condition);
+        }
 
         const colorMapping = {
             "": "Colorless", W: "White", U: "Blue", B: "Black", R: "Red", G: "Green",
@@ -103,16 +107,17 @@
             const filters = filterTypes
                 .map(type => ({
                     type: type,
-                    list: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[checked='true']") || [])
-                        .map(b => b.title)
+                    include: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[include][checked='true']") || []).map(b => b.title),
+                    exclude: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[exclude][checked='true']") || []).map(b => b.title)
                 }));
+
             console.log(...filters);
 
             filters.forEach(filter => {
                 const wrapper = Dom.qs([`[selected="${filter.type}"]`]);
                 if (!!wrapper) {
                     wrapper.innerText = "";
-                    filter.list.map(name => wrapper.append(Span.with({
+                    filter.include.map(name => wrapper.append(Span.with({
                         class: `ms-1 badge text-bg-light border`,
                         innerText: colorMapping[name] || name
                     }).create()))
@@ -124,7 +129,7 @@
 
             Debugger.cards = cards;
 
-            const filterLists = filters.map(filter => filter.list);
+            const filterLists = filters.map(filter => filter.include);
 
             cards.forEach(card => {
                 const isCardVisible = isVisible(...filterLists)(card);
@@ -151,14 +156,20 @@
         }
 
         function toggleButton(node) {
-            const checked = node.getAttribute("checked") === 'true';
-            node.setAttribute("checked", !checked);
-            node.classList.toggle("btn-outline-primary", checked);
-            node.classList.toggle("btn-primary", !checked);
+            const oldValue = node.getAttribute("checked") === 'true';
+            const checked = !oldValue;
+            node.setAttribute("checked", checked);
+
+            if ([...node.classList].some(c => c.match(/primary/g))) {
+                node.classList.toggleTF(checked, "btn-primary", "btn-outline-primary");
+            }
+            if ([...node.classList].some(c => c.match(/secondary/g))) {
+                node.classList.toggleTF(checked, "btn-secondary", "btn-outline-secondary");
+            }
+
             const inner = node.querySelector("[inner]");
             if (inner) {
-                inner.classList.toggle("btn-light", checked);
-                inner.classList.toggle("btn-link", !checked);
+                inner.classList.toggleTF(checked, "btn-link", "btn-light");
             }
         }
 
@@ -223,14 +234,23 @@
                                     ],
                                     attribute: {
                                         type: "button",
+                                        include: "",
                                         checked: false,
                                         title: type,
                                     },
                                     event: { click: (e, n) => { toggleButton(n); updateFilters(); } }
                                 }).wrapWith(Div.with({
                                     class: "btn-group col-12",
+
                                     children: Button.with({
                                         class: "btn btn-outline-secondary border-left-0 px-0 col-1",
+                                        attribute: {
+                                            type: "button",
+                                            exclude: "",
+                                            checked: false,
+                                            title: `Exclude ${type}`,
+                                        },
+                                        event: { click: (e, n) => { toggleButton(n); updateFilters(); } }
                                     })
                                 }), { optional: isTypes, position: 0 })
                             ]
