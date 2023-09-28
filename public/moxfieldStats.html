@@ -115,8 +115,8 @@
 
         function getSort(color, ci, hubs, type) {
             return (c1, c2) =>
-                compare(c1, c2, ci.include, "colorIdentity") ||
                 compare(c1, c2, hubs.include, "hubs") ||
+                compare(c1, c2, ci.include, "colorIdentity") ||
                 c2.count() - c1.count()
         }
 
