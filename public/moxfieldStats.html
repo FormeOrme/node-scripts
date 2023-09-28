@@ -151,8 +151,6 @@
             const cards = Array.from(cardsContainer.querySelectorAll("[card]"));
 
             Debugger.cards = cards;
-            Timer.time("WriteDescription");
-            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, ...filters);
 
             Timer.time("ToggleCards");
             cards.forEach(card => {
@@ -161,6 +159,9 @@
                 card.visible = isCardVisible;
                 card.updateCount(...filters);
             });
+
+            Timer.time("WriteDescription");
+            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, ...filters);
 
             Timer.time("SortCards");
             cards.sort(getSort(...filters)).forEach(card => cardsContainer.append(card));
@@ -315,7 +316,7 @@
 
         const reduceObj = (obj, arr) => arr.reduce((a, c) => a + obj[c], 0);
 
-        fetch('/moxfieldStatsData.json')
+        fetch('./moxfieldStatsData.json')
             .then((response) => response.json())
             .then((data) => {
                 Debugger.data = data;
