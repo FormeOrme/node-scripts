@@ -40,6 +40,7 @@ if (!argv.skip) {
         constructor(card, deck) {
             this.name = card.name;
             this.image = CARD_IMAGES[card.name]?.image;
+            this.keywords = CARD_IMAGES[card.name]?.keywords || [];
             this.count = 1;
             this.types = card.type_line.match(/\w+/g);
             this.color = deck.countColor;
@@ -121,6 +122,7 @@ if (!argv.skip) {
                 count: this.count,
                 countMap: this.countMap,
                 types: Array.from(new Set(cards.reduce((a, c) => { a.push(...c.types); return a }, []))).sort(localeCompare),
+                keywords: Array.from(new Set(cards.reduce((a, c) => { a.push(...c.keywords); return a }, []))).sort(localeCompare),
                 superTypes: Array.from(new Set(this.superTypes)),
                 cards: cards,
                 commanderCI: this.commanderCI,
@@ -131,9 +133,10 @@ if (!argv.skip) {
     console.time("BuildCardImages");
     const CARD_IMAGES = JSON.parse(fs.readFileSync(loadFile("oracle-cards-", "json")))
         // .filter(c => c.legalities.historicbrawl == "legal" || c.legalities.explorer == "legal" || c.legalities.historic == "legal")
-        .map(c => ({
-            name: c.name,
-            image: c.image_uris?.normal || c.card_faces[0].image_uris?.normal
+        .map(card => ({
+            name: card.name,
+            image: card.image_uris?.normal || card.card_faces[0].image_uris?.normal,
+            keywords: card.keywords
         }))
         .reduce((a, c) => { a[c.name] = c; return a; }, {});
     console.timeEnd("BuildCardImages");

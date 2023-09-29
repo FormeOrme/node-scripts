@@ -90,7 +90,7 @@
             WUBRG: "Five-Color"
         }
 
-        function textVersion(count, color, ci, hubs, type, commander) {
+        function textVersion(count, color, ci, hubs, type, commander, keywords) {
             return `${count} ${type.include.join(" ")} ` +
                 `card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} ` +
                 `in${ci.include.isEmpty() ? "" : ` ${textJoin(ci.include.map(c => colorMapping[c] || c))}`} decks ` +
@@ -110,7 +110,7 @@
             }
         }
 
-        function isVisible(color, ci, hubs, type, commander) {
+        function isVisible(color, ci, hubs, type, commander, keywords) {
             return card =>
                 (!color.include.isEmpty() ? color.include.isContained(Object.keys(card.color())) : true) &&
                 (!ci.include.isEmpty() ? ci.include.isContained(Object.keys(card.colorIdentity())) : true) &&
@@ -118,12 +118,13 @@
                 (!type.include.isEmpty() ? type.include.isContained(card.type()) : true) &&
                 (!type.exclude.isEmpty() ? !type.exclude.containsOne(card.type()) : true) &&
                 (!commander.include.isEmpty() ? commander.include.isContained(Object.keys(card.commander())) : true) &&
+                (!keywords.include.isEmpty() ? keywords.include.isContained(card.keywords()) : true) &&
                 true;
         }
 
         const compare = (c1, c2, list, property) => c2.sum(list, property) - c1.sum(list, property);
 
-        function getSort(color, ci, hubs, type, commander) {
+        function getSort(color, ci, hubs, type, commander, keywords) {
             return (c1, c2) =>
                 compare(c1, c2, commander.include, "commander") ||
                 compare(c1, c2, hubs.include, "hubs") ||
@@ -131,7 +132,7 @@
                 c2.count() - c1.count()
         }
 
-        const filterTypes = ["color", "colorIdentity", "hubs", "types", "commander"];
+        const filterTypes = ["color", "colorIdentity", "hubs", "types", "commander", "keywords"];
 
         function updateFilters() {
             Timer.time("LoadFilters");
@@ -259,11 +260,12 @@
                             _: (pillCount = data.countMap[typeId]?.[type],
                                 isCI = typeId === "colorIdentity",
                                 isTypes = typeId === "types",
+                                isKeywords = typeId === "keywords",
                                 isCommander = typeId === "commander",
                                 isSuperType = data.superTypes.includes(type)),
                             class: `${isCommander ? "col-2" : "col-1"} p-0 m-1 position-relative ${pillCount ? "ms-3" : ""} `,
                             children: [
-                                isTypes ? null : Span.with({
+                                (isTypes || isKeywords) ? null : Span.with({
                                     class: "badge rounded-pill bg-primary position-absolute top-50 start-0 translate-middle",
                                     attribute: {
                                         count: pillCount
@@ -350,6 +352,7 @@
                         AccordionItem("commander", "Commander", data),
                         AccordionItem("hubs", "Hub", data),
                         AccordionItem("types", "Type", data),
+                        AccordionItem("keywords", "Keywords", data),
                     ]
                 }).create());
                 console.timeEnd("BUILD_ACCORDION");
@@ -386,11 +389,12 @@
                         ],
                         function: {
                             count: () => card.count,
-                            type: () => card.types,
                             color: () => card.color,
-                            hubs: () => card.hubs,
-                            commander: () => card.commander,
                             colorIdentity: () => card.colorIdentity,
+                            hubs: () => card.hubs,
+                            type: () => card.types,
+                            commander: () => card.commander,
+                            keywords: () => card.keywords,
 
                             loadImage: function () {
                                 this.querySelector("[image]").src = card.image;
