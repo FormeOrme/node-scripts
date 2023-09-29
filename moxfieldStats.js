@@ -76,7 +76,7 @@ if (!argv.skip) {
         get countCommander() { return ({ [this.commander.name]: 1 }); }
 
         isValid() {
-            return true;// this.hubs.length != 0;
+            return !!this.commander;// this.hubs.length != 0;
         }
 
     }
@@ -136,7 +136,7 @@ if (!argv.skip) {
         .map(card => ({
             name: card.name,
             image: card.image_uris?.normal || card.card_faces[0].image_uris?.normal,
-            keywords: card.keywords
+            keywords: ["clb", "afr", "hbg"].includes(card.set) ? [] : card.keywords
         }))
         .reduce((a, c) => { a[c.name] = c; return a; }, {});
     console.timeEnd("BuildCardImages");
@@ -166,7 +166,7 @@ if (!argv.skip) {
                     })
                     .forEach(card => allCards.add(card, deck));
             } else {
-                console.log(`${deck.name} is not valid`);
+                console.log(`[${file}] ${deck.name} is not valid`);
             }
         }
     });

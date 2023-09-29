@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { performance } = require('perf_hooks');
+
 
 var argv = require('minimist')(process.argv.slice(2));
 console.log(argv);
@@ -29,25 +31,23 @@ if (!fs.existsSync(responsesFolder)) {
 }
 
 // Function to save response data to a file
-function saveResponseToFile(url, index, data) {
+function saveResponseToFile(url, index, data, startTime) {
   const urlParts = url.split('/');
   const filename = `${urlParts[urlParts.length - 1]}.json`;
   const filePath = path.join(responsesFolder, filename);
   const newFile = !fs.existsSync(filePath);
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  console.log(`#${index}: Saved ${filename}, isNew( ${newFile} )`);
+  const diff = (performance.now() - startTime).toFixed(2);
+  console.log(`#${index} [${newFile}]: Saved [${data.createdByUser.userName}]'s [${data.name}], took [${diff}]`);
 }
 
 // Function to make a single Axios request with a delay
 function makeDelayedRequest(url, delay) {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
-      const id = `Received response for ${url}`;
-      console.time(id);
       axios.get(url)
         .then(response => {
-          console.timeEnd(id);
           resolve(response);
         })
         .catch(error => reject(error));
@@ -64,9 +64,10 @@ axios.get(LIST_URL)
 
     // Process responses as they arrive
     promisesWithDelays.forEach((promise, index) => {
+      const startTime = performance.now();
       promise
         .then(response => {
-          saveResponseToFile(urlList[index], index, response.data);
+          saveResponseToFile(urlList[index], index, response.data, startTime);
         })
         .catch(error => {
           console.error(`Error for ${urlList[index]}:`, error);
