@@ -9,7 +9,7 @@ console.log(argv);
 const app = express();
 const port = 3000;
 
-const threshold = 3;
+const threshold = 1;
 
 const loadFile = (startName, extension) => fs.readdirSync(__dirname)
     .reverse()
@@ -115,7 +115,7 @@ if (!argv.skip) {
         }
 
         get data() {
-            const cards = Object.values(this.cardsMap).filter(c => c.count > threshold);
+            const cards = Object.values(this.cardsMap).filter(c => c.count >= threshold);
             return ({
                 threshold: threshold,
                 count: this.count,
@@ -128,7 +128,7 @@ if (!argv.skip) {
         }
     }
 
-    console.time("CARD_IMAGES");
+    console.time("BuildCardImages");
     const CARD_IMAGES = JSON.parse(fs.readFileSync(loadFile("oracle-cards-", "json")))
         // .filter(c => c.legalities.historicbrawl == "legal" || c.legalities.explorer == "legal" || c.legalities.historic == "legal")
         .map(c => ({
@@ -136,14 +136,15 @@ if (!argv.skip) {
             image: c.image_uris?.normal || c.card_faces[0].image_uris?.normal
         }))
         .reduce((a, c) => { a[c.name] = c; return a; }, {});
-    console.timeEnd("CARD_IMAGES");
+    console.timeEnd("BuildCardImages");
 
-    console.time("moxfieldStatsData");
+    console.time("ReadData");
     const moxfieldDecksFolder = path.join(__dirname, 'moxfield_decks');
     const files = fs.readdirSync(moxfieldDecksFolder);
     const allCards = new CardList();
-    files.forEach((file) => {
+    files.forEach((file, index) => {
         if (file.endsWith('.json')) {
+            console.log(`Reading file ${index + 1}/${files.length} (${file})`)
             const deckPath = path.join(moxfieldDecksFolder, file);
             const deck = Object.setPrototypeOf(JSON.parse(fs.readFileSync(deckPath, 'utf8')), Deck.prototype);
 
@@ -166,8 +167,11 @@ if (!argv.skip) {
             }
         }
     });
+    console.timeEnd("ReadData");
+
+    console.time("BuildJson");
     fs.writeFileSync("public/moxfieldStatsData.json", JSON.stringify(allCards.data));
-    console.timeEnd("moxfieldStatsData");
+    console.timeEnd("BuildJson");
 }
 
 app.use(express.static('public'));
