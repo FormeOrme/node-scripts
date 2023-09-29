@@ -17,9 +17,9 @@ const loadFile = (startName, extension) => fs.readdirSync(__dirname)
 
 const localeCompare = (a, b) => a.localeCompare(b);
 
-const nameCleanup = (name) => name
-    .replace(/A-/g, "")
-    .replace(/[^\w]/g, "").toLowerCase()
+const indexName = (name) => name.replace(/A-/g, "").replace(/[^\w]/g, "").toLowerCase()
+
+const humanName = (name) => name.replace(/A-/g, "").replace(/ \/\/.+/g, "")
 
 function mergeObjects(arrayOfObjects) {
     const sumObject = {};
@@ -35,88 +35,99 @@ function mergeObjects(arrayOfObjects) {
     return sumObject;
 }
 
-class Card {
-    constructor(card, deck) {
-        this.name = card.name;
-        this.image = CARD_IMAGES[card.name]?.image;
-        this.count = 1;
-        this.types = card.type_line.match(/\w+/g);
-        this.color = deck.countColor;
-        this.commander = deck.countCommander;
-        this.colorIdentity = deck.countColorIdentity;
-        this.hubs = deck.countHubs;
-    }
-
-    update(deck) {
-        this.count++;
-        const ci = deck.colorIdentity.join("");
-        this.colorIdentity[ci] = (this.colorIdentity[ci] || 0) + 1;
-        deck.colorIdentity.forEach(c => this.color[c] = (this.color[c] || 0) + 1);
-        deck.hubs.map(h => h.name).forEach(c => this.hubs[c] = (this.hubs[c] || 0) + 1);
-
-        this.commander[deck.commander.name] = (this.commander[deck.commander.name] || 0) + 1;
-    }
-}
-
-class Deck {
-    get countColor() { return this.colorIdentity.reduce((a, c) => { a[c] = 1; return a; }, {}); }
-    get countColorIdentity() { return ({ [this.colorIdentity.join("")]: 1 }); }
-    get countHubs() { return this.hubs.map(h => h.name).reduce((a, c) => { a[c] = 1; return a; }, {}); }
-
-    get commander() { return Object.values(this.boards.commanders.cards).map(wrapper => wrapper.card)[0]; }
-    get countCommander() { return ({ [this.commander.name]: 1 }); }
-
-    isValid() {
-        return true;// this.hubs.length != 0;
-    }
-
-}
-
-class CardList {
-    constructor() {
-        this.map = {};
-        this.count = 0;
-        this.superTypes = [];
-        this.countMap = {
-            color: {},
-            colorIdentity: {},
-            hubs: {},
-            commander: {}
-        };
-    }
-
-    add(card, deck) {
-        const cardNameId = nameCleanup(card.name);
-        this.superTypes = [
-            ...this.superTypes,
-            ...card.type_line.split("—")[0].match(/\w+/g)
-        ]
-        this.map[cardNameId]
-            ? this.map[cardNameId].update(deck)
-            : (this.map[cardNameId] = new Card(card, deck));
-    }
-
-    updateCounts(deck) {
-        this.countMap.color = mergeObjects([this.countMap.color, deck.countColor]);
-        this.countMap.colorIdentity = mergeObjects([this.countMap.colorIdentity, deck.countColorIdentity]);
-        this.countMap.hubs = mergeObjects([this.countMap.hubs, deck.countHubs]);
-        this.countMap.commander = mergeObjects([this.countMap.commander, deck.countCommander]);
-    }
-
-    get data() {
-        const cards = Object.values(this.map).filter(c => c.count > threshold);
-        return ({
-            threshold: threshold,
-            count: this.count,
-            countMap: this.countMap,
-            types: Array.from(new Set(cards.reduce((a, c) => { a.push(...c.types); return a }, []))).sort(localeCompare),
-            superTypes: Array.from(new Set(this.superTypes)),
-            cards: cards,
-        });
-    }
-}
-
 if (!argv.skip) {
+    class Card {
+        constructor(card, deck) {
+            this.name = card.name;
+            this.image = CARD_IMAGES[card.name]?.image;
+            this.count = 1;
+            this.types = card.type_line.match(/\w+/g);
+            this.color = deck.countColor;
+            this.commander = deck.countCommander;
+            this.colorIdentity = deck.countColorIdentity;
+            this.hubs = deck.countHubs;
+        }
+
+        update(deck) {
+            this.count++;
+            const ci = deck.colorIdentity.join("");
+            this.colorIdentity[ci] = (this.colorIdentity[ci] || 0) + 1;
+            deck.colorIdentity.forEach(c => this.color[c] = (this.color[c] || 0) + 1);
+            deck.hubs.map(h => h.name).forEach(c => this.hubs[c] = (this.hubs[c] || 0) + 1);
+            this.commander[deck.commander.name] = (this.commander[deck.commander.name] || 0) + 1;
+        }
+    }
+
+    class Deck {
+        get countColor() { return this.colorIdentity.reduce((a, c) => { a[c] = 1; return a; }, {}); }
+        get ci() { return this.colorIdentity.join(""); }
+        get countColorIdentity() { return ({ [this.ci]: 1 }); }
+        get countHubs() { return this.hubs.map(h => h.name).reduce((a, c) => { a[c] = 1; return a; }, {}); }
+
+        get commander() {
+            return Object.values(this.boards.commanders.cards)
+                .map(wrapper => {
+                    const card = wrapper.card;
+                    card.name = humanName(card.name);
+                    return card;
+                })[0];
+        }
+        get countCommander() { return ({ [this.commander.name]: 1 }); }
+
+        isValid() {
+            return true;// this.hubs.length != 0;
+        }
+
+    }
+
+    class CardList {
+        constructor() {
+            this.cardsMap = {};
+            this.count = 0;
+            this.superTypes = [];
+            this.countMap = {
+                color: {},
+                colorIdentity: {},
+                hubs: {},
+                commander: {}
+            };
+            this.commanderCI = {};
+        }
+
+        add(card, deck) {
+            const cardNameId = indexName(card.name);
+            this.superTypes = [
+                ...this.superTypes,
+                ...card.type_line.split("—")[0].match(/\w+/g)
+            ]
+            this.cardsMap[cardNameId]
+                ? this.cardsMap[cardNameId].update(deck)
+                : (this.cardsMap[cardNameId] = new Card(card, deck));
+
+            this.commanderCI[deck.commander.name] = deck.ci;
+        }
+
+        updateCounts(deck) {
+            this.countMap.color = mergeObjects([this.countMap.color, deck.countColor]);
+            this.countMap.colorIdentity = mergeObjects([this.countMap.colorIdentity, deck.countColorIdentity]);
+            this.countMap.hubs = mergeObjects([this.countMap.hubs, deck.countHubs]);
+            this.countMap.commander = mergeObjects([this.countMap.commander, deck.countCommander]);
+        }
+
+        get data() {
+            const cards = Object.values(this.cardsMap).filter(c => c.count > threshold);
+            return ({
+                threshold: threshold,
+                count: this.count,
+                countMap: this.countMap,
+                types: Array.from(new Set(cards.reduce((a, c) => { a.push(...c.types); return a }, []))).sort(localeCompare),
+                superTypes: Array.from(new Set(this.superTypes)),
+                cards: cards,
+                commanderCI: this.commanderCI,
+            });
+        }
+    }
+
     console.time("CARD_IMAGES");
     const CARD_IMAGES = JSON.parse(fs.readFileSync(loadFile("oracle-cards-", "json")))
         // .filter(c => c.legalities.historicbrawl == "legal" || c.legalities.explorer == "legal" || c.legalities.historic == "legal")
@@ -126,7 +137,7 @@ if (!argv.skip) {
         }))
         .reduce((a, c) => { a[c.name] = c; return a; }, {});
     console.timeEnd("CARD_IMAGES");
-    
+
     console.time("moxfieldStatsData");
     const moxfieldDecksFolder = path.join(__dirname, 'moxfield_decks');
     const files = fs.readdirSync(moxfieldDecksFolder);

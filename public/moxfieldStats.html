@@ -54,6 +54,9 @@
             const mainSet = new Set(main);
             return this.every(element => mainSet.has(element));
         };
+        Array.prototype.isEmpty = function () {
+            return this.length === 0;
+        };
         Array.prototype.containsOne = function (main) {
             const mainSet = new Set(main);
             return this.some(element => mainSet.has(element));
@@ -87,8 +90,14 @@
             WUBRG: "Five-Color"
         }
 
-        function textVersion(count, color, ci, hubs, type) {
-            return `${count} ${type.include.join(" ")} card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} in${ci.include.length == 0 ? "" : ` ${textJoin(ci.include.map(c => colorMapping[c] || c))}`} decks ${ci.include.length != 0 && hubs.include.length != 0 ? 'or decks ' : ''} ${hubs.include.length == 0 ? "" : `tagged with ${textJoin(hubs.include)}`} ${type.exclude.length == 0 ? '' : `(excluding ${textJoin(type.exclude, "and")} cards)`}`.trim();
+        function textVersion(count, color, ci, hubs, type, commander) {
+            return `${count} ${type.include.join(" ")} ` +
+                `card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} ` +
+                `in${ci.include.isEmpty() ? "" : ` ${textJoin(ci.include.map(c => colorMapping[c] || c))}`} decks ` +
+                `${hubs.include.isEmpty() ? "" : `${!ci.include.isEmpty() ? 'or decks' : ''} tagged with ${textJoin(hubs.include)}`} ` +
+                `${commander.include.isEmpty() ? "" : `${!hubs.include.isEmpty() || (hubs.include.isEmpty() && !ci.include.isEmpty()) ? 'or decks' : ''} with ${textJoin(commander.include)} as Commander`} ` +
+                `${type.exclude.isEmpty() ? '' : `(excluding ${textJoin(type.exclude, "and")} cards)`}`
+                    .trim();
         }
 
         function textJoin(list, op = "or") {
@@ -101,26 +110,28 @@
             }
         }
 
-        function isVisible(color, ci, hubs, type) {
+        function isVisible(color, ci, hubs, type, commander) {
             return card =>
-                (color.include.length != 0 ? color.include.isContained(Object.keys(card.color())) : true) &&
-                (ci.include.length != 0 ? ci.include.isContained(Object.keys(card.colorIdentity())) : true) &&
-                (hubs.include.length != 0 ? hubs.include.isContained(Object.keys(card.hubs())) : true) &&
-                (type.include.length != 0 ? type.include.isContained(card.type()) : true) &&
-                (type.exclude.length != 0 ? !type.exclude.containsOne(card.type()) : true) &&
+                (!color.include.isEmpty() ? color.include.isContained(Object.keys(card.color())) : true) &&
+                (!ci.include.isEmpty() ? ci.include.isContained(Object.keys(card.colorIdentity())) : true) &&
+                (!hubs.include.isEmpty() ? hubs.include.isContained(Object.keys(card.hubs())) : true) &&
+                (!type.include.isEmpty() ? type.include.isContained(card.type()) : true) &&
+                (!type.exclude.isEmpty() ? !type.exclude.containsOne(card.type()) : true) &&
+                (!commander.include.isEmpty() ? commander.include.isContained(Object.keys(card.commander())) : true) &&
                 true;
         }
 
         const compare = (c1, c2, list, property) => c2.sum(list, property) - c1.sum(list, property);
 
-        function getSort(color, ci, hubs, type) {
+        function getSort(color, ci, hubs, type, commander) {
             return (c1, c2) =>
+                compare(c1, c2, commander.include, "commander") ||
                 compare(c1, c2, hubs.include, "hubs") ||
                 compare(c1, c2, ci.include, "colorIdentity") ||
                 c2.count() - c1.count()
         }
 
-        const filterTypes = ["color", "colorIdentity", "hubs", "types"];
+        const filterTypes = ["color", "colorIdentity", "hubs", "types", "commander"];
 
         function updateFilters() {
             Timer.time("LoadFilters");
@@ -248,8 +259,9 @@
                             _: (pillCount = data.countMap[typeId]?.[type],
                                 isCI = typeId === "colorIdentity",
                                 isTypes = typeId === "types",
+                                isCommander = typeId === "commander",
                                 isSuperType = data.superTypes.includes(type)),
-                            class: `col-1 p-0 m-1 position-relative ${pillCount ? "ms-3" : ""} `,
+                            class: `${isCommander ? "col-2" : "col-1"} p-0 m-1 position-relative ${pillCount ? "ms-3" : ""} `,
                             children: [
                                 isTypes ? null : Span.with({
                                     class: "badge rounded-pill bg-primary position-absolute top-50 start-0 translate-middle",
@@ -258,12 +270,14 @@
                                     }
                                 }),
                                 Button.with({
-                                    class: `${isCI ? `mtg-${type} border-0 rounded-3` : ""} ${isTypes ? `border-end-0` : ""} p-1 col-12 btn ${BTN_TYPE.include.offClass} m-0 text-truncate ${isSuperType ? 'fw-bold' : 'fw-normal'}`,
+                                    class: `${isCommander ? `mtg-${data.commanderCI[type]} border-0 rounded-3` : ""} ${isCI ? `mtg-${type} border-0 rounded-3` : ""} ${isTypes ? `border-end-0` : ""} p-1 col-12 btn ${BTN_TYPE.include.offClass} m-0 text-truncate ${isSuperType ? 'fw-bold' : 'fw-normal'}`,
                                     children: [
-                                        Small.with({
-                                            class: `${isCI ? `btn btn-light rounded-2 text-decoration-none text-info-emphasis col-12 p-0` : ""}`,
-                                            innerText: colorMapping[type] || type,
-                                            attribute: isCI ? { inner: "" } : {}
+                                        Span.with({
+                                            class: `${isCI || isCommander ? `btn btn-light rounded-2 text-decoration-none text-info-emphasis col-12 p-0` : ""}`,
+                                            attribute: isCI || isCommander ? { inner: "" } : {},
+                                            children: Small.with({
+                                                innerText: colorMapping[type] || type,
+                                            })
                                         })
                                     ],
                                     attribute: {
@@ -272,7 +286,7 @@
                                         checked: false,
                                         title: type,
                                     },
-                                    event: { click: (e, n) => { toggleButton(n); updateFilters(); } }
+                                    event: { click: (e, node) => { toggleButton(node); updateFilters(); } }
                                 }).wrapWith(Div.with({
                                     class: "btn-group col-12",
 
@@ -284,7 +298,7 @@
                                             checked: false,
                                             title: `Exclude ${type}`,
                                         },
-                                        event: { click: (e, n) => { toggleButton(n); updateFilters(); } }
+                                        event: { click: (e, node) => { toggleButton(node); updateFilters(); } }
                                     })
                                 }), { optional: isTypes, position: 0 })
                             ]
@@ -333,6 +347,7 @@
                     children: [
                         // AccordionItem("color", "Color", data),
                         AccordionItem("colorIdentity", "Color Identity", data),
+                        AccordionItem("commander", "Commander", data),
                         AccordionItem("hubs", "Hub", data),
                         AccordionItem("types", "Type", data),
                     ]
@@ -374,24 +389,30 @@
                             type: () => card.types,
                             color: () => card.color,
                             hubs: () => card.hubs,
+                            commander: () => card.commander,
                             colorIdentity: () => card.colorIdentity,
 
                             loadImage: function () {
                                 this.querySelector("[image]").src = card.image;
                             },
 
-                            updateCount: function (color, ci, hubs, type) {
+                            updateCount: function (color, ci, hubs, type, commander) {
                                 let total = data.count;
                                 let count = card.count;
 
-                                if (ci.include.length != 0) {
+                                if (!ci.include.isEmpty()) {
                                     total = reduceObj(data.countMap.colorIdentity, ci.include);
                                     count = reduceObj(card.colorIdentity, ci.include);
                                 }
 
-                                if (hubs.include.length != 0) {
+                                if (!hubs.include.isEmpty()) {
                                     total = reduceObj(data.countMap.hubs, hubs.include);
                                     count = reduceObj(card.hubs, hubs.include);
+                                }
+
+                                if (!commander.include.isEmpty()) {
+                                    total = reduceObj(data.countMap.commander, commander.include);
+                                    count = reduceObj(card.commander, commander.include);
                                 }
 
                                 this.querySelector("[progress]").innerText = `${count}/${total} (${Utils.prc(count, total).toFixed(1)}%)`;
