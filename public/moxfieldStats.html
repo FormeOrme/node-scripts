@@ -90,45 +90,46 @@
             WUBRG: "Five-Color"
         }
 
-        function textVersion(count, color, ci, hubs, type, commander, keywords) {
-            return `${count} ${type.include.join(" ")} ` +
-                `card${count == 1 ? "" : "s"} appear${count == 1 ? "s" : ""} ` +
-                `in${ci.include.isEmpty() ? "" : ` ${textJoin(ci.include.map(c => colorMapping[c] || c))}`} decks ` +
-                `${hubs.include.isEmpty() ? "" : `${!ci.include.isEmpty() ? 'or decks' : ''} tagged with ${textJoin(hubs.include)}`} ` +
-                `${commander.include.isEmpty() ? "" : `${!hubs.include.isEmpty() || (hubs.include.isEmpty() && !ci.include.isEmpty()) ? 'or decks' : ''} with ${textJoin(commander.include)} as Commander`} ` +
-                `${type.exclude.isEmpty() ? '' : `(excluding ${textJoin(type.exclude, "and")} cards)`}`
-                    .trim();
-        }
-
-        function textJoin(list, op = "or") {
+        function textJoin(list, operator = "or") {
             const clone = [...list];
             if (clone.length == 1) {
                 return clone[0];
             } else {
                 const last = clone.pop();
-                return clone.join(", ") + ` ${op} ` + last;
+                return clone.join(", ") + ` ${operator} ` + last;
             }
         }
 
-        function isVisible(color, ci, hubs, type, commander, keywords) {
+        function textVersion(count, filters) {
+            return `${count} ${filters.types.include.join(" ")} ` +
+                `card${count == 1 ? "" : "s"} ` + `${filters.keywords.include.isEmpty() ? "" : `with ${textJoin(filters.keywords.include, "and")}`} ` + `appear${count == 1 ? "s" : ""} ` +
+                `in${filters.colorIdentity.include.isEmpty() ? "" : ` ${textJoin(filters.colorIdentity.include.map(c => colorMapping[c] || c))}`} decks ` +
+                `${filters.hubs.include.isEmpty() ? "" : `${!filters.colorIdentity.include.isEmpty() ? 'or decks' : ''} tagged with ${textJoin(filters.hubs.include)}`} ` +
+                `${filters.commander.include.isEmpty() ? "" : `${!filters.hubs.include.isEmpty() || (filters.hubs.include.isEmpty() && !filters.colorIdentity.include.isEmpty()) ? 'or decks' : ''} ` +
+                    `with ${textJoin(filters.commander.include)} as Commander`} ` +
+                `${filters.types.exclude.isEmpty() ? '' : `(excluding ${textJoin(filters.types.exclude, "and")} cards)`}`
+                    .trim();
+        }
+
+        function isVisible(filters) {
             return card =>
-                (!color.include.isEmpty() ? color.include.isContained(Object.keys(card.color())) : true) &&
-                (!ci.include.isEmpty() ? ci.include.isContained(Object.keys(card.colorIdentity())) : true) &&
-                (!hubs.include.isEmpty() ? hubs.include.isContained(Object.keys(card.hubs())) : true) &&
-                (!type.include.isEmpty() ? type.include.isContained(card.type()) : true) &&
-                (!type.exclude.isEmpty() ? !type.exclude.containsOne(card.type()) : true) &&
-                (!commander.include.isEmpty() ? commander.include.isContained(Object.keys(card.commander())) : true) &&
-                (!keywords.include.isEmpty() ? keywords.include.isContained(card.keywords()) : true) &&
+                (!filters.color.include.isEmpty() ? filters.color.include.isContained(Object.keys(card.color())) : true) &&
+                (!filters.colorIdentity.include.isEmpty() ? filters.colorIdentity.include.isContained(Object.keys(card.colorIdentity())) : true) &&
+                (!filters.hubs.include.isEmpty() ? filters.hubs.include.isContained(Object.keys(card.hubs())) : true) &&
+                (!filters.types.include.isEmpty() ? filters.types.include.isContained(card.type()) : true) &&
+                (!filters.types.exclude.isEmpty() ? !filters.types.exclude.containsOne(card.type()) : true) &&
+                (!filters.commander.include.isEmpty() ? filters.commander.include.isContained(Object.keys(card.commander())) : true) &&
+                (!filters.keywords.include.isEmpty() ? filters.keywords.include.isContained(card.keywords()) : true) &&
                 true;
         }
 
         const compare = (c1, c2, list, property) => c2.sum(list, property) - c1.sum(list, property);
 
-        function getSort(color, ci, hubs, type, commander, keywords) {
+        function getSort(filters) {
             return (c1, c2) =>
-                compare(c1, c2, commander.include, "commander") ||
-                compare(c1, c2, hubs.include, "hubs") ||
-                compare(c1, c2, ci.include, "colorIdentity") ||
+                compare(c1, c2, filters.commander.include, "commander") ||
+                compare(c1, c2, filters.hubs.include, "hubs") ||
+                compare(c1, c2, filters.colorIdentity.include, "colorIdentity") ||
                 c2.count() - c1.count()
         }
 
@@ -136,16 +137,16 @@
 
         function updateFilters() {
             Timer.time("LoadFilters");
-            const filters = filterTypes
+            const filters = Utils.kvMap(filterTypes
                 .map(type => ({
                     type: type,
                     include: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[include][checked='true']") || []).map(b => b.getAttribute("include")),
                     exclude: Array.from(Dom.NODES[`${type}Filter`]?.querySelectorAll("[exclude][checked='true']") || []).map(b => b.getAttribute("exclude"))
-                }));
-            console.log(...filters);
+                })), o => o.type);
+            console.log(filters);
 
             Timer.time("UpdateBadges");
-            filters.forEach(filter => {
+            Object.values(filters).forEach(filter => {
                 const wrapper = Dom.qs([`[selected="${filter.type}"]`]);
                 if (!!wrapper) {
                     wrapper.innerText = "";
@@ -166,17 +167,17 @@
 
             Timer.time("ToggleCards");
             cards.forEach(card => {
-                const isCardVisible = isVisible(...filters)(card);
+                const isCardVisible = isVisible(filters)(card);
                 card.classList.toggle("d-none", !isCardVisible);
                 card.visible = isCardVisible;
-                card.updateCount(...filters);
+                card.updateCount(filters);
             });
 
             Timer.time("WriteDescription");
-            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, ...filters);
+            Dom.NODES.textDescription.innerText = textVersion(cards.filter(c => c.visible).length, filters);
 
             Timer.time("SortCards");
-            cards.sort(getSort(...filters)).forEach(card => cardsContainer.append(card));
+            cards.sort(getSort(filters)).forEach(card => cardsContainer.append(card));
 
             Timer.time("LimitResults");
             /* Limit results **/
@@ -400,23 +401,23 @@
                                 this.querySelector("[image]").src = card.image;
                             },
 
-                            updateCount: function (color, ci, hubs, type, commander) {
+                            updateCount: function (filters) {
                                 let total = data.count;
                                 let count = card.count;
 
-                                if (!ci.include.isEmpty()) {
-                                    total = reduceObj(data.countMap.colorIdentity, ci.include);
-                                    count = reduceObj(card.colorIdentity, ci.include);
+                                if (!filters.colorIdentity.include.isEmpty()) {
+                                    total = reduceObj(data.countMap.colorIdentity, filters.colorIdentity.include);
+                                    count = reduceObj(card.colorIdentity, filters.colorIdentity.include);
                                 }
 
-                                if (!hubs.include.isEmpty()) {
-                                    total = reduceObj(data.countMap.hubs, hubs.include);
-                                    count = reduceObj(card.hubs, hubs.include);
+                                if (!filters.hubs.include.isEmpty()) {
+                                    total = reduceObj(data.countMap.hubs, filters.hubs.include);
+                                    count = reduceObj(card.hubs, filters.hubs.include);
                                 }
 
-                                if (!commander.include.isEmpty()) {
-                                    total = reduceObj(data.countMap.commander, commander.include);
-                                    count = reduceObj(card.commander, commander.include);
+                                if (!filters.commander.include.isEmpty()) {
+                                    total = reduceObj(data.countMap.commander, filters.commander.include);
+                                    count = reduceObj(card.commander, filters.commander.include);
                                 }
 
                                 this.querySelector("[progress]").innerText = `${count}/${total} (${Utils.prc(count, total).toFixed(1)}%)`;
