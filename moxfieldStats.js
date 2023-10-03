@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const chalk = require('chalk');
 
 var argv = require('minimist')(process.argv.slice(2));
 console.log(argv);
@@ -96,16 +97,21 @@ if (!argv.skip) {
         }
 
         add(card, deck) {
-            const cardNameId = indexName(card.name);
-            this.superTypes = [
-                ...this.superTypes,
-                ...card.type_line.split("—")[0].match(/\w+/g)
-            ]
-            this.cardsMap[cardNameId]
-                ? this.cardsMap[cardNameId].update(deck)
-                : (this.cardsMap[cardNameId] = new Card(card, deck));
+            try {
+                const cardNameId = indexName(card.name);
+                this.superTypes = [
+                    ...this.superTypes,
+                    ...card.type_line.split("—")[0].match(/\w+/g)
+                ]
+                this.cardsMap[cardNameId]
+                    ? this.cardsMap[cardNameId].update(deck)
+                    : (this.cardsMap[cardNameId] = new Card(card, deck));
 
-            this.commanderCI[deck.commander.name] = deck.ci;
+                this.commanderCI[deck.commander.name] = deck.ci;
+
+            } catch {
+                console.error(chalk.red(`[${deck.publicId}]:[${card.name}] is not valid`));
+            }
         }
 
         updateCounts(deck) {
@@ -166,7 +172,7 @@ if (!argv.skip) {
                     })
                     .forEach(card => allCards.add(card, deck));
             } else {
-                console.log(`[${file}] ${deck.name} is not valid`);
+                console.error(chalk.red(`[${file}] ${deck.name} is not valid`));
             }
         }
     });
