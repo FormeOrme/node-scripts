@@ -1,3 +1,3 @@
-# Moxfield HB Stats
-[Moxfield HB Stats](https://formeorme.github.io/node-scripts/public/moxfieldStats.html)
+# HB Stats
+[HB Stats](https://formeorme.github.io/node-scripts/public/DeckStats.html)
 
