@@ -46,7 +46,7 @@
 
 <body>
     <div class="container" id="container">
-        <h1 class="mt-4">Moxfield Deck Stats</h1>
+        <h1 class="mt-4">Deck Stats</h1>
     </div>
 
     <script>
@@ -333,7 +333,7 @@
 
         const reduceObj = (obj, arr) => arr.reduce((a, c) => a + obj[c], 0);
 
-        fetch('./moxfieldStatsData.json')
+        fetch('./statsData.json')
             .then((response) => response.json())
             .then((data) => {
                 Debugger.data = data;

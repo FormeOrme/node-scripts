@@ -179,7 +179,7 @@ if (!argv.skip) {
     console.timeEnd("ReadData");
 
     console.time("BuildJson");
-    fs.writeFileSync("public/moxfieldStatsData.json", JSON.stringify(allCards.data));
+    fs.writeFileSync("public/statsData.json", JSON.stringify(allCards.data));
     console.timeEnd("BuildJson");
 }
 
@@ -187,11 +187,11 @@ app.use(express.static('public'));
 app.use('/moxfield_decks', express.static('moxfield_decks'));
 
 app.get('/moxfieldStats', (req, res) => {
-    const htmlFilePath = path.join(__dirname, 'public', 'moxfieldStats.html');
+    const htmlFilePath = path.join(__dirname, 'public', 'DeckStats.html');
     const html = fs.readFileSync(htmlFilePath, 'utf8');
     res.send(html);
 });
 
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}/moxfieldStats`);
+    console.log(`Server is running on http://localhost:${port}/DeckStats.html`);
 });
