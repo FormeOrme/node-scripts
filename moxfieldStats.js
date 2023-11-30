@@ -60,6 +60,8 @@ if (!argv.skip) {
         }
     }
 
+    const EXCLUSION = [];
+
     class Deck {
         get countColor() { return this.colorIdentity.reduce((a, c) => { a[c] = 1; return a; }, {}); }
         get ci() { return this.colorIdentity.join(""); }
@@ -153,11 +155,14 @@ if (!argv.skip) {
     const allCards = new CardList();
     files.forEach((file, index) => {
         if (file.endsWith('.json')) {
-            console.log(`Reading file ${index + 1}/${files.length} (${file})`)
+            // console.log(`Reading file ${index + 1}/${files.length} (${file})`);
             const deckPath = path.join(moxfieldDecksFolder, file);
             const deck = Object.setPrototypeOf(JSON.parse(fs.readFileSync(deckPath, 'utf8')), Deck.prototype);
-
             if (deck.isValid()) {
+                if (EXCLUSION.includes(deck.authors[0].userName)) {
+                    return;
+                }
+                console.log(`File ${index + 1}/${files.length} (${file}) Included`);
                 allCards.count++;
                 const deckCards = [
                     ...Object.values(deck.boards.mainboard.cards),
