@@ -5,3 +5,5 @@ node_modules
 oracle-cards*
 *.csv
 graphs/2024-01-01_13-39-21.xls
+*.265
+*.mp4

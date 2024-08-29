@@ -2,7 +2,6 @@ const ytdl = require('ytdl-core');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 const tmp = require('tmp');
-const playlistInfo = require('youtube-playlist-info');
 
 var argv = require('minimist')(process.argv.slice(2));
 
@@ -61,7 +60,8 @@ function convertToWav(inputPath, outputPath) {
     });
 }
 
-const base = "https://www.youtube.com/watch?v=";
-
-const url = argv.url;
-downloadUrl(url);
+if (argv.url) {
+    downloadUrl(argv.url.trim()).catch(err => {
+        console.error(err);
+    });
+}
